@@ -3281,14 +3281,14 @@ write.csv(super_final_metadata_with_holiday, "fully_final_metadata.csv")
 # Select and arrange top 10 highest opening weekend movies
 top_10_movies <- super_final_metadata_with_holiday %>%
   dplyr::select(title, release_date, opening_locs, opening_weekend_eur,
-                primary_genre = genre_grouped, run_time, MPAA_rating, n_comments, star_power_count) %>%
+                primary_genre = genre_grouped, run_time, MPAA_rating, star_power_count) %>%
   arrange(desc(opening_weekend_eur)) %>%
   slice_head(n = 10)
 
 # Select and arrange bottom 10 lowest opening weekend movies
 bottom_10_movies <- super_final_metadata_with_holiday %>%
   dplyr::select(title, release_date, opening_locs, opening_weekend_eur,
-                primary_genre = genre_grouped, run_time, MPAA_rating, n_comments, star_power_count) %>%
+                primary_genre = genre_grouped, run_time, MPAA_rating, star_power_count) %>%
   arrange(opening_weekend_eur) %>%
   slice_head(n = 10)
 
@@ -3306,8 +3306,7 @@ top_10_movies_clean <- top_10_movies %>%
     `Opening Weekend (Euros)` = opening_weekend_eur,
     `Primary Genre` = primary_genre,
     `Run Time` = run_time,
-    `MPAA Rating` = MPAA_rating,
-    `Number of Comments` = n_comments, 
+    `MPAA Rating` = MPAA_rating, 
     `Number of Star Actors` = star_power_count
   )
 
@@ -3320,8 +3319,7 @@ bottom_10_movies_clean <- bottom_10_movies %>%
     `Opening Weekend (Euros)` = opening_weekend_eur,
     `Primary Genre` = primary_genre,
     `Run Time` = run_time,
-    `MPAA Rating` = MPAA_rating,
-    `Number of Comments` = n_comments, 
+    `MPAA Rating` = MPAA_rating, 
     `Number of Star Actors` = star_power_count
   )
 
@@ -3334,7 +3332,7 @@ kable(bottom_10_movies_clean, caption = "2. Bottom 10 Movies by Opening Weekend 
 
 
 # checking top 20 movies with the highest opening weekend
-super_final_metadata %>%
+super_final_metadata_with_holiday %>%
   arrange(desc(opening_weekend_eur)) %>%
   select(title, opening_weekend_eur, primary_genre, star_power_count, director_power, distributor_power) %>%
   head(20)
@@ -3816,59 +3814,7 @@ valence_summary %>%
         col.names = c("Sentiment", "Mean", "Median", "SD", "Min", "Max"))
 
 
-# Positive Sentiment Plot
-plot_pos <- ggplot(super_duper_final_meta_data_with_sent, aes(x = prop_pos, y = log_opening_weekend_eur)) +
-  geom_point(alpha = 0.6, color = "#1f77b4") +
-  geom_smooth(method = "lm", se = TRUE, color = "#1f77b4", linetype = "dashed") +
-  labs(
-    title = "Relationship Between Positive Sentiment and Opening Weekend Revenue",
-    x = "Proportion of Positive Comments",
-    y = "Log Opening Weekend Revenue"
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    axis.title.x = element_text(face = "bold"),
-    axis.title.y = element_text(face = "bold")
-  )
-ggsave("positive_sentiment_vs_log_revenue.png", plot = plot_pos, width = 10, height = 6, dpi = 300)
-
-# Neutral Sentiment Plot
-plot_neut <- ggplot(super_duper_final_meta_data_with_sent, aes(x = prop_neut, y = log_opening_weekend_eur)) +
-  geom_point(alpha = 0.6, color = "#ff7f0e") +
-  geom_smooth(method = "lm", se = TRUE, color = "#ff7f0e", linetype = "dashed") +
-  labs(
-    title = "Relationship Between Neutral Sentiment and Opening Weekend Revenue",
-    x = "Proportion of Neutral Comments",
-    y = "Log Opening Weekend Revenue"
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    axis.title.x = element_text(face = "bold"),
-    axis.title.y = element_text(face = "bold")
-  )
-ggsave("neutral_sentiment_vs_log_revenue.png", plot = plot_neut, width = 10, height = 6, dpi = 300)
-
-# Negative Sentiment Plot
-plot_neg <- ggplot(super_duper_final_meta_data_with_sent, aes(x = prop_neg, y = log_opening_weekend_eur)) +
-  geom_point(alpha = 0.6, color = "#d62728") +
-  geom_smooth(method = "lm", se = TRUE, color = "#d62728", linetype = "dashed") +
-  labs(
-    title = "Relationship Between Negative Sentiment and Opening Weekend Revenue",
-    x = "Proportion of Negative Comments",
-    y = "Log Opening Weekend Revenue"
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    axis.title.x = element_text(face = "bold"),
-    axis.title.y = element_text(face = "bold")
-  )
-ggsave("negative_sentiment_vs_log_revenue.png", plot = plot_neg, width = 10, height = 6, dpi = 300)
-
-
-
+###### scatter plots for sentiment valence variables vs log opening weekend revenues
 # Positive Sentiment
 plot_pos <- ggplot(super_duper_final_meta_data_with_sent,
                    aes(x = prop_pos, y = log_opening_weekend_eur)) +
@@ -3926,6 +3872,14 @@ combined_plot <- plot_grid(plot_pos, plot_neut, plot_neg, ncol = 3, align = "h",
 
 # Save the combined plot
 ggsave("sentiment_scatter_combined_cowplot.png", combined_plot, width = 16, height = 6, dpi = 300)
+
+# checking the structure of the final pre-modelling dataset 
+str(super_duper_final_meta_data_with_sent)
+
+# saving the final pre-modelling dataset 
+write.csv(super_duper_final_meta_data_with_sent, 
+          "super_duper_final_meta_data_with_sent.csv")
+
 
 ############ let's divide the data into training and test sets and check the simple linear regression model's performance (NO SENTIMENT VARIABLES!!!!!)
 # Set seed for reproducibility
@@ -4611,7 +4565,7 @@ rf_model_no_locs <- randomForest(
 # Generate the plot with improved labels
 plot(
   x = 1:rf_model_no_locs$ntree,
-  y = rf_model$mse,
+  y = rf_model_no_locs$mse,
   type = "l",
   lwd = 2,
   col = "darkblue",
@@ -4992,29 +4946,32 @@ for (eta in eta_vals) {
 results_no_buzz <- results_no_buzz[order(results_no_buzz$best_rmse), ]
 print(results_no_buzz)
 
+# save the best hyperparameter configuration
+best_config_no_buzz <- results_no_buzz[1, ]
+
 # let's train a model on the best hyperparameters, so the ones with the lowest test rmse and then check performance on the holdout test set 
-# Define the best parameters
-best_params <- list(
+# Define the best parameters automatically from saved config
+best_params_no_buzz <- list(
   objective = "reg:squarederror",
   eval_metric = "rmse",
-  eta = 0.01,
-  max_depth = 4,
-  min_child_weight = 5,
-  gamma = 0,
-  lambda = 5,
-  alpha = 0,
-  subsample = 0.8,
-  colsample_bytree = 0.8
+  eta = best_config_no_buzz$eta,
+  max_depth = best_config_no_buzz$max_depth,
+  min_child_weight = best_config_no_buzz$min_child_weight,
+  gamma = best_config_no_buzz$gamma,
+  lambda = best_config_no_buzz$lambda,
+  alpha = best_config_no_buzz$alpha,
+  subsample = 0.8,        # fixed
+  colsample_bytree = 0.8  # fixed
 )
 
-# Best number of boosting rounds from CV
-best_nrounds <- 914
+# Number of boosting rounds from CV
+best_nrounds_no_buzz <- best_config_no_buzz$best_iteration
 
-# train the model
+# train the model on the best hyperparameters
 xgb_final_no_buzz <- xgb.train(
-  params = best_params,
+  params = best_params_no_buzz,
   data = train_matrix_xgb_no_buzz,
-  nrounds = best_nrounds,
+  nrounds = best_nrounds_no_buzz,
   watchlist = list(train = train_matrix_xgb_no_buzz, test = test_matrix_xgb_no_buzz),
   verbose = 1
 )
@@ -5523,29 +5480,32 @@ for (eta in eta_vals) {
 results_vol_only <- results_vol_only[order(results_vol_only$best_rmse), ]
 print(results_vol_only)
 
+# save the best hyperparameter configuration
+best_config_vol_only <- results_vol_only[1, ]
+
 # let's train a model on the best hyperparameters, so the ones with the lowest test rmse and then check performance on the holdout test set 
-# Define the best parameters
-best_params <- list(
+# Define the best parameters automatically from saved config
+best_params_vol_only <- list(
   objective = "reg:squarederror",
   eval_metric = "rmse",
-  eta = 0.01,
-  max_depth = 4,
-  min_child_weight = 5,
-  gamma = 0,
-  lambda = 5,
-  alpha = 0,
-  subsample = 0.8,
-  colsample_bytree = 0.8
+  eta = best_config_vol_only$eta,
+  max_depth = best_config_vol_only$max_depth,
+  min_child_weight = best_config_vol_only$min_child_weight,
+  gamma = best_config_vol_only$gamma,
+  lambda = best_config_vol_only$lambda,
+  alpha = best_config_vol_only$alpha,
+  subsample = 0.8,        # fixed
+  colsample_bytree = 0.8  # fixed
 )
 
-# Best number of boosting rounds from CV
-best_nrounds <- 806
+# Number of boosting rounds from CV
+best_nrounds_vol_only <- best_config_vol_only$best_iteration
 
-# train the model
+# train the model on the best hyperparameters
 xgb_final_vol_only <- xgb.train(
-  params = best_params,
+  params = best_params_vol_only,
   data = train_matrix_xgb_vol_only,
-  nrounds = best_nrounds,
+  nrounds = best_nrounds_vol_only,
   watchlist = list(train = train_matrix_xgb_vol_only, test = test_matrix_xgb_vol_only),
   verbose = 1
 )
@@ -5686,29 +5646,33 @@ for (eta in eta_vals) {
 results_vol_val <- results_vol_val[order(results_vol_val$best_rmse), ]
 print(results_vol_val)
 
+# saving the best hyperparameter configuration
+best_config_vol_val <- results_vol_val[1, ]
+
+
 # let's train a model on the best hyperparameters, so the ones with the lowest test rmse and then check performance on the holdout test set 
-# Define the best parameters
-best_params <- list(
+# Define the best parameters automatically from saved config
+best_params_vol_val <- list(
   objective = "reg:squarederror",
   eval_metric = "rmse",
-  eta = 0.10,
-  max_depth = 6,
-  min_child_weight = 5,
-  gamma = 1,
-  lambda = 5,
-  alpha = 1,
-  subsample = 0.8,
-  colsample_bytree = 0.8
+  eta = best_config_vol_val$eta,
+  max_depth = best_config_vol_val$max_depth,
+  min_child_weight = best_config_vol_val$min_child_weight,
+  gamma = best_config_vol_val$gamma,
+  lambda = best_config_vol_val$lambda,
+  alpha = best_config_vol_val$alpha,
+  subsample = 0.8,        # fixed
+  colsample_bytree = 0.8  # fixed
 )
 
-# Best number of boosting rounds from CV
-best_nrounds <- 110
+# Number of boosting rounds from CV
+best_nrounds_vol_val <- best_config_vol_val$best_iteration
 
 # train the model
 xgb_final_vol_val <- xgb.train(
-  params = best_params,
+  params = best_params_vol_val,
   data = train_matrix_xgb_vol_val,
-  nrounds = best_nrounds,
+  nrounds = best_nrounds_vol_val,
   watchlist = list(train = train_matrix_xgb_vol_val, test = test_matrix_xgb_vol_val),
   verbose = 1
 )
@@ -5853,29 +5817,32 @@ for (eta in eta_vals) {
 results_no_buzz_no_locs <- results_no_buzz_no_locs[order(results_no_buzz_no_locs$best_rmse), ]
 print(results_no_buzz_no_locs)
 
+# saving the best identified hyperparameters
+best_config_no_buzz_no_locs <- results_no_buzz_no_locs[1, ]
+
+
 # let's train a model on the best hyperparameters, so the ones with the lowest test rmse and then check performance on the holdout test set 
-# Define the best parameters
-best_params <- list(
+best_params_no_buzz_no_locs <- list(
   objective = "reg:squarederror",
   eval_metric = "rmse",
-  eta = 0.10,
-  max_depth = 3,
-  min_child_weight = 5,
-  gamma = 1,
-  lambda = 1,
-  alpha = 0,
+  eta = best_config_no_buzz_no_locs$eta,
+  max_depth = best_config_no_buzz_no_locs$max_depth,
+  min_child_weight = best_config_no_buzz_no_locs$min_child_weight,
+  gamma = best_config_no_buzz_no_locs$gamma,
+  lambda = best_config_no_buzz_no_locs$lambda,
+  alpha = best_config_no_buzz_no_locs$alpha,
   subsample = 0.8,
   colsample_bytree = 0.8
 )
 
 # Best number of boosting rounds from CV
-best_nrounds <- 84
+best_nrounds_no_buzz_no_locs <- best_config_no_buzz_no_locs$best_iteration
 
 # train the model
 xgb_final_no_buzz_no_locs <- xgb.train(
-  params = best_params,
+  params = best_params_no_buzz_no_locs,
   data = train_matrix_xgb_no_buzz_no_locs,
-  nrounds = best_nrounds,
+  nrounds = best_nrounds_no_buzz_no_locs,
   watchlist = list(train = train_matrix_xgb_no_buzz_no_locs, test = test_matrix_xgb_no_buzz_no_locs),
   verbose = 1
 )
@@ -6041,29 +6008,31 @@ for (eta in eta_vals) {
 results_vol_only_no_locs <- results_vol_only_no_locs[order(results_vol_only_no_locs$best_rmse), ]
 print(results_vol_only_no_locs)
 
+# saving the best identified hyperparameters
+best_config_vol_only_no_locs <- results_vol_only_no_locs[1, ]
+
 # let's train a model on the best hyperparameters, so the ones with the lowest test rmse and then check performance on the holdout test set 
-# Define the best parameters
-best_params <- list(
+best_params_vol_only_no_locs <- list(
   objective = "reg:squarederror",
   eval_metric = "rmse",
-  eta = 0.05,
-  max_depth = 3,
-  min_child_weight = 5,
-  gamma = 1,
-  lambda = 5,
-  alpha = 1,
-  subsample = 0.8,
-  colsample_bytree = 0.8
+  eta = best_config_vol_only_no_locs$eta,
+  max_depth = best_config_vol_only_no_locs$max_depth,
+  min_child_weight = best_config_vol_only_no_locs$min_child_weight,
+  gamma = best_config_vol_only_no_locs$gamma,
+  lambda = best_config_vol_only_no_locs$lambda,
+  alpha = best_config_vol_only_no_locs$alpha,
+  subsample = 0.8,        # fixed
+  colsample_bytree = 0.8  # fixed
 )
 
-# Best number of boosting rounds from CV
-best_nrounds <- 143
+# Number of boosting rounds from CV
+best_nrounds_vol_only_no_locs <- best_config_vol_only_no_locs$best_iteration
 
-# train the model
+# train the model on the best parameters
 xgb_final_vol_only_no_locs <- xgb.train(
-  params = best_params,
+  params = best_params_vol_only_no_locs,
   data = train_matrix_xgb_vol_only_no_locs,
-  nrounds = best_nrounds,
+  nrounds = best_nrounds_vol_only_no_locs,
   watchlist = list(train = train_matrix_xgb_vol_only_no_locs, test = test_matrix_xgb_vol_only_no_locs),
   verbose = 1
 )
@@ -6205,29 +6174,33 @@ for (eta in eta_vals) {
 results_vol_val_no_locs <- results_vol_val_no_locs[order(results_vol_val_no_locs$best_rmse), ]
 print(results_vol_val_no_locs)
 
+# save the best hyperparameter configuration
+best_config_vol_val_no_locs <- results_vol_only_no_locs[1, ]
+
+
 # let's train a model on the best hyperparameters, so the ones with the lowest test rmse and then check performance on the holdout test set 
-# Define the best parameters
-best_params <- list(
+# Define the best parameters automatically from saved config
+best_params_vol_val_no_locs <- list(
   objective = "reg:squarederror",
   eval_metric = "rmse",
-  eta = 0.05,
-  max_depth = 3,
-  min_child_weight = 5,
-  gamma = 1,
-  lambda = 5,
-  alpha = 0,
-  subsample = 0.8,
-  colsample_bytree = 0.8
+  eta = best_config_vol_val_no_locs$eta,
+  max_depth = best_config_vol_val_no_locs$max_depth,
+  min_child_weight = best_config_vol_val_no_locs$min_child_weight,
+  gamma = best_config_vol_val_no_locs$gamma,
+  lambda = best_config_vol_val_no_locs$lambda,
+  alpha = best_config_vol_val_no_locs$alpha,
+  subsample = 0.8,        # fixed
+  colsample_bytree = 0.8  # fixed
 )
 
-# Best number of boosting rounds from CV
-best_nrounds <- 144
+# Number of boosting rounds from CV
+best_nrounds_vol_val_no_locs <- best_config_vol_val_no_locs$best_iteration
 
 # train the model
 xgb_final_vol_val_no_locs <- xgb.train(
-  params = best_params,
+  params = best_params_vol_val_no_locs,
   data = train_matrix_xgb_vol_val_no_locs,
-  nrounds = best_nrounds,
+  nrounds = best_nrounds_vol_val_no_locs,
   watchlist = list(train = train_matrix_xgb_vol_val_no_locs, test = test_matrix_xgb_vol_val_no_locs),
   verbose = 1
 )
