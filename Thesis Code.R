@@ -3358,6 +3358,25 @@ table(super_final_classified_comments$bert_sentiment)
 summary(super_final_classified_comments$bert_confidence)
 
 
+# extracting video_id for each title 
+video_ids_per_title <- super_final_classified_comments %>%
+  select(title, release_date, video_id) %>%       # keep only title and video_id
+  distinct() %>%                    # remove duplicates
+  arrange(title)                    # optional: sort alphabetically by title
+
+# View the result
+head(video_ids_per_title)
+
+# add the full YouTube link to each trailer video ID
+video_ids_per_title$youtube_link <- paste0(
+  "https://www.youtube.com/watch?v=", video_ids_per_title$video_id
+)
+
+# saving these video IDs for later inspection
+write_xlsx(video_ids_per_title, "video_ids_with_links.xlsx")
+
+
+
 #################### creating buzz volume and valence variables 
 ### let's create number of pre-release comments per title variable (buzz volume) 
 # Step 1: Count comments per title
@@ -4080,6 +4099,9 @@ ggplot(top_coef_lm_df, aes(x = reorder(Variable, Abs_Coefficient), y = Abs_Coeff
 
 
 ###################### building non-linear tree-based machine learning models ################################
+
+
+######################### RANDOM FOREST ################################################################
 ################# running a basic random forest without hyper parameter tuning to see whether performance better than linear regression
 ########## 1. without buzz volume
 rf_model_baseline_no_comments <- randomForest(
@@ -8209,178 +8231,79 @@ ggsave("mae_buzz_comparison.png",
        height = 6,           # Height in inches
        dpi = 300)            # High resolution (300 DPI)
 
-############################ 5 MOVIE PREDICTION COMPARISON #################################################
-# Standardize predictor inputs: log_star_power_count and opening_locs
-test_data <- test_data %>%
+############################ 2 MOVIE PREDICTION COMPARISON #################################################
+# Create a results dataframe with titles, actuals, and predictions
+# Combine all predictions into a single dataframe
+comparison_df <- data.frame(
+  movie = test_data$title,  # replace with correct column for movie names
+  actual = actuals,  # from earlier XGBoost code
+  
+  xgb_pred = preds_xgb_final_no_buzz,
+  rf_pred = predictions_rf_with_sent,
+  ridge_pred = as.numeric(ridge_min_preds_vol_val),
+  lasso_pred = as.numeric(lasso_min_preds_vol_val),
+  elastic_pred = as.numeric(elastic_min_preds_vol_val)
+)
+
+# Calculate errors for each model
+comparison_df <- comparison_df %>%
   mutate(
-    z_star_power = scale(log_star_power_count)[, 1],
-    z_opening_locs = scale(opening_locs)[, 1]
+    xgb_error = abs(xgb_pred - actual),
+    rf_error = abs(rf_pred - actual),
+    ridge_error = abs(ridge_pred - actual),
+    lasso_error = abs(lasso_pred - actual),
+    elastic_error = abs(elastic_pred - actual)
   )
 
+# View table sorted by XGBoost error (smallest to largest)
+comparison_df <- comparison_df %>%
+  arrange(xgb_error)
 
-# Compute expected performance as sum of standardized star power and distribution scale
-test_data <- test_data %>%
-  mutate(
-    expected_score = z_star_power + z_opening_locs
-  )
-
-
-# Standardize actual performance (z-score of log opening weekend revenue)
-test_data <- test_data %>%
-  mutate(
-    z_actual_rev = scale(log_opening_weekend_eur)[, 1]
-  )
-
-# Deviation shows whether movie outperformed or underperformed vs. expected score
-test_data <- test_data %>%
-  mutate(
-    deviation = z_actual_rev - expected_score
-  )
-
-# High Performer – highest opening revenue
-high_perf <- test_data %>%
-  arrange(desc(opening_weekend_eur)) %>%
-  slice(1) %>%
-  mutate(type = "High Performer")
-
-# Mid Performer – closest to median actual z-score
-mid_perf <- test_data %>%
-  arrange(abs(z_actual_rev - median(z_actual_rev, na.rm = TRUE))) %>%
-  dplyr::slice(1) %>%
-  mutate(type = "Mid Performer")
-
-# Low Performer – lowest opening revenue
-low_perf <- test_data %>%
-  arrange(opening_weekend_eur) %>%
-  dplyr::slice(1) %>%
-  mutate(type = "Low Performer")
-
-# Surprising Overachiever – highest positive deviation
-surprising_over <- test_data %>%
-  arrange(desc(deviation)) %>%
-  dplyr::slice(1) %>%
-  mutate(type = "Surprising Overachiever")
-
-# Surprising Underperformer – lowest deviation (excluding High Performer)
-surprising_under <- test_data %>%
-  filter(!(title %in% high_perf$title)) %>%
-  arrange(deviation) %>%
-  dplyr::slice(1) %>%
-  mutate(type = "Surprising Underperformer")
-
-# Drop release_month from all selected rows
-high_perf <- dplyr::select(high_perf, -release_month)
-mid_perf <- dplyr::select(mid_perf, -release_month)
-low_perf <- dplyr::select(low_perf, -release_month)
-surprising_over <- dplyr::select(surprising_over, -release_month)
-surprising_under <- dplyr::select(surprising_under, -release_month)
-
-# Drop release_day_name from all selected rows
-high_perf <- dplyr::select(high_perf, -release_day_name)
-mid_perf <- dplyr::select(mid_perf, -release_day_name)
-low_perf <- dplyr::select(low_perf, -release_day_name)
-surprising_over <- dplyr::select(surprising_over, -release_day_name)
-surprising_under <- dplyr::select(surprising_under, -release_day_name)
+print(comparison_df)
 
 
+# Row indices for chosen movies Menu, The and Promising Young Woman
+chosen_rows <- c(66, 32)
 
-# Now combine
-movie_selection <- bind_rows(
-  high_perf, mid_perf, low_perf, surprising_over, surprising_under
+# Extract actual EUR values directly from the dataset
+actual_eur <- test_data$opening_weekend_eur[chosen_rows]
+
+# Back-transform predictions (log -> euro scale)
+xgb_pred_eur <- exp(preds_xgb_final_no_buzz[chosen_rows])
+rf_pred_eur <- exp(predictions_rf_with_sent[chosen_rows])
+ridge_pred_eur <- exp(as.numeric(ridge_min_preds_vol_val[chosen_rows]))
+lasso_pred_eur <- exp(as.numeric(lasso_min_preds_vol_val[chosen_rows]))
+elastic_pred_eur <- exp(as.numeric(elastic_min_preds_vol_val[chosen_rows]))
+
+# Create comparison table
+case_comparison_df <- data.frame(
+  movie = test_data$title[chosen_rows],  # adjust column name if needed
+  actual_opening_weekend_eur = actual_eur,
+  xgb_pred_eur = xgb_pred_eur,
+  rf_pred_eur = rf_pred_eur,
+  ridge_pred_eur = ridge_pred_eur,
+  lasso_pred_eur = lasso_pred_eur,
+  elastic_pred_eur = elastic_pred_eur
 )
 
+print(case_comparison_df)
 
+# Function to calculate absolute percentage error
+ape <- function(actual, predicted) {
+  abs((actual - predicted) / actual) * 100
+}
 
-# Step 6: Combine selections
-movie_selection <- bind_rows(
-  high_perf, mid_perf, low_perf, surprising_over, surprising_under
-)
-
-# Step 7: View relevant columns
-movie_selection %>%
-  dplyr::select(
-    type, title, opening_weekend_eur,
-    log_star_power_count, opening_locs,
-    expected_score, z_actual_rev, deviation
-  )
-
-###### predicting the opening weekend revenues of these 5 movies with the best performing versions of each model
-movie_indices <- which(test_data$title %in% movie_selection$title)
-print(movie_indices)
-
-# Match titles with correct row numbers
-movie_indices_named <- c(
-  "Avengers: Endgame" = 7,
-  "Paws of Fury: The Legend of Hank" = 72,
-  "Echo Boomers" = 41,
-  "Creed III" = 71,
-  "Transformers One" = 109
-)
-
-# Get ordered indices in same order as movie_selection$title
-ordered_indices <- movie_indices_named[movie_selection$title]
-
-
-# Extract model predictions for the 5 selected movies across different models
-xgb_preds_df <- data.frame(
-  Title = movie_selection$title,
-  `Actual (Euros)` = test_data$opening_weekend_eur[ordered_indices],
-  `XGBoost (No Buzz)` = exp(preds_xgb_final_no_buzz[ordered_indices]),
-  `Elastic Net (Buzz Volume + Valence)` = exp(elastic_min_preds_vol_val[ordered_indices]),
-  `Ridge (Buzz Volume + Valence)` = exp(ridge_min_preds_vol_val[ordered_indices]),
-  `Lasso (Buzz Volume + Valence)` = exp(lasso_min_preds_vol_val[ordered_indices]),
-  `Random Forest (Buzz Volume Only)` = exp(predictions_rf_volume_only[ordered_indices])
-)
-
-# Add the type column from movie_selection
-xgb_preds_df$type <- movie_selection$type
-
-
-# give proper column names 
-colnames(xgb_preds_df) <- c(
-  "Title",
-  "Type",
-  "Actual (Euros)",
-  "XGBoost (No Buzz)",
-  "Elastic Net (Buzz Volume + Valence)",
-  "Ridge (Buzz Volume + Valence)",
-  "Lasso (Buzz Volume + Valence)",
-  "Random Forest (Buzz Volume Only)"
-)
-
+# Adding APE columns for each model
+case_comparison_df$ape_xgb <- ape(case_comparison_df$actual_opening_weekend_eur, case_comparison_df$xgb_pred_eur)
+case_comparison_df$ape_rf <- ape(case_comparison_df$actual_opening_weekend_eur, case_comparison_df$rf_pred_eur)
+case_comparison_df$ape_ridge <- ape(case_comparison_df$actual_opening_weekend_eur, case_comparison_df$ridge_pred_eur)
+case_comparison_df$ape_lasso <- ape(case_comparison_df$actual_opening_weekend_eur, case_comparison_df$lasso_pred_eur)
+case_comparison_df$ape_elastic <- ape(case_comparison_df$actual_opening_weekend_eur, case_comparison_df$elastic_pred_eur)
 
 # Round for readability
-xgb_preds_df <- xgb_preds_df %>%
-  mutate(across(where(is.numeric), ~ round(., 0)))
+case_comparison_df[, -1] <- round(case_comparison_df[, -1], 2)
 
-# View the final comparison table
-print(xgb_preds_df)
-
-# Reorder columns for readability (optional)
-xgb_preds_df <- xgb_preds_df %>%
-  dplyr::select(Title, everything())
-
-# View updated dataframe
-print(xgb_preds_df)
-
-
-# create a table of these 5 movies with certain deterministic features
-# Step 1: Subset the relevant columns for the selected movies
-buzz_summary_sample_movies <- test_data[ordered_indices, ] %>%
-  dplyr::select(
-    "Title" = title,
-    "Opening Weekend (Euros)" = opening_weekend_eur,
-    "Star Power Count" = star_power_count,
-    "Number of Pre-release Comments" = n_comments,
-    "Proportion of Positive Comments" = prop_pos,
-    "Proportion of Negative Comments" = prop_neg,
-    "Number of Opening Locations" = opening_locs, 
-    "Director Power" = director_power,
-    "Distributor Power" = distributor_power
-  )
-
-# View the table
-print(buzz_summary_sample_movies)
+print(case_comparison_df)
 
 
 
