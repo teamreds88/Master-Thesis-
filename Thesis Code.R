@@ -6197,7 +6197,7 @@ results_vol_val_no_locs <- results_vol_val_no_locs[order(results_vol_val_no_locs
 print(results_vol_val_no_locs)
 
 # save the best hyperparameter configuration
-best_config_vol_val_no_locs <- results_vol_only_no_locs[1, ]
+best_config_vol_val_no_locs <- results_vol_val_no_locs[1, ]
 
 
 # let's train a model on the best hyperparameters, so the ones with the lowest test rmse and then check performance on the holdout test set 
