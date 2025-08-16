@@ -4811,6 +4811,49 @@ ggplot(top_vars, aes(x = reorder(Variable, Importance), y = Importance)) +
   theme_minimal()
 
 
+###### ALE plots to see whether buzz is actually non-linear
+# Prepare features and target
+# Extract model variables (excluding the target)
+model_vars <- all.vars(formula(rf_ranger_model_with_vol_sent_no_locs))[2:length(all.vars(formula(rf_ranger_model_with_vol_sent_no_locs)))]
+
+# Subset only those columns from train_data
+X_rf <- train_data[, model_vars]
+
+# Also ensure correct dtypes (convert factors to character for iml)
+X_rf_clean <- X_rf %>% mutate(across(where(is.factor), as.character))
+
+# Get target again
+y_rf <- train_data$log_opening_weekend_eur
+
+
+# Wrap caret model inside iml Predictor
+rf_predictor <- Predictor$new(
+  model = rf_ranger_model_with_vol_sent_no_locs,
+  data = X_rf_clean,
+  y = y_rf
+)
+
+ale_log_n_comments <- FeatureEffect$new(
+  predictor = rf_predictor,
+  feature = "log_n_comments",
+  method = "ale"
+)
+plot(ale_log_n_comments)
+
+ale_prop_pos <- FeatureEffect$new(
+  predictor = rf_predictor,
+  feature = "prop_pos",
+  method = "ale"
+)
+plot(ale_prop_pos)
+
+ale_prop_neg <- FeatureEffect$new(
+  predictor = rf_predictor,
+  feature = "prop_neg",
+  method = "ale"
+)
+plot(ale_prop_neg)
+
 
 ############################### XGBoost ###################################################
 # Step 1: Create a copy of the dataset
@@ -6254,6 +6297,54 @@ xgb.plot.importance(importance_matrix[1:10, ], top_n = 10,
                     rel_to_first = TRUE, 
                     xlab = "Relative Importance (Gain)", 
                     main = "Top 10 Variable Importances: XGBoost (No Opening Locations)")
+
+
+##### ALE Plots for volume and valence variables 
+# Step 1: Extract feature names from trained model
+xgb_model_features <- xgb_final_vol_val_no_locs$feature_names
+
+# Step 2: Prepare matching input data
+xgb_ale_data_matrix <- model.matrix(~ . -1, data = train_data_xgb_vol_val_no_locs[, -1])
+xgb_ale_data <- as.data.frame(xgb_ale_data_matrix)
+
+# Step 3: Align and fill missing columns
+missing_cols <- setdiff(xgb_model_features, colnames(xgb_ale_data))
+for (col in missing_cols) {
+  xgb_ale_data[[col]] <- 0
+}
+xgb_ale_data <- xgb_ale_data[, xgb_model_features]
+
+# Step 4: Define prediction function
+xgb_predict_function <- function(model, newdata) {
+  newdata <- as.data.frame(newdata)
+  missing <- setdiff(xgb_model_features, names(newdata))
+  for (col in missing) {
+    newdata[[col]] <- 0
+  }
+  newdata <- newdata[, xgb_model_features, drop = FALSE]
+  newdata_matrix <- data.matrix(newdata)
+  predict(model, newdata = newdata_matrix)
+}
+
+# Step 5: Create Predictor object
+predictor_xgb_buzz <- Predictor$new(
+  model = xgb_final_vol_val_no_locs,
+  data = xgb_ale_data,
+  y = train_data_xgb_vol_val_no_locs$log_opening_weekend_eur,
+  predict.function = xgb_predict_function 
+)
+
+# Step 6: Generate ALE plots
+ale_log_n_comments <- FeatureEffect$new(predictor_xgb_buzz, feature = "log_n_comments", method = "ale")
+plot(ale_log_n_comments)
+
+ale_prop_pos <- FeatureEffect$new(predictor_xgb_buzz, feature = "prop_pos", method = "ale")
+plot(ale_prop_pos)
+
+ale_prop_neg <- FeatureEffect$new(predictor_xgb_buzz, feature = "prop_neg", method = "ale")
+plot(ale_prop_neg)
+
+
 
 
 ############################ REGULARIZED REGRESSION MODELS ##################################################
